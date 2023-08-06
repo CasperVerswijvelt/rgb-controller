@@ -1,10 +1,23 @@
 #include <EEPROM.h>
+#include <math.h>
 
 int PIN_LED = 17;
 int PIN_BTN = 3;
-int LOOP_INTERVAL = 10;
-int EEPROM_ON_ADDRESS = 0;
-int EEPROM_MODE_ADDRESS = 1;
+int PIN_RED;
+int PIN_GREEN;
+int PIN_BLUE;
+
+int LOOP_INTERVAL = 100;
+
+int EEPROM_CURRENT_ADDRESS = 0;
+
+int EEPROM_ON_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+int EEPROM_MODE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+int EEPROM_HUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+int EEPROM_VALUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+
+float BRIGHTNESS_STEP_PER_S = 0.33;
+float HUE_STEP_PER_S = 0.2;
 
 // State
 bool on;
@@ -13,10 +26,24 @@ bool on;
 //  mode 2: brightness cycle
 int mode ;
 
+// LED state
+float hue;
+float saturation = 1;
+float value;
+
 // Button state
 int btnPrevious = 1;
-long int tDown = 0;
+unsigned long tDown = 0;
 boolean pressHandled = true;
+
+// Reusable rgb color
+float rgbColor[3];
+
+// Time of last loop
+unsigned long tLastLoop = 0;
+
+// Brightness breath effect, going up or doin
+bool brightnessGoingUp = true;
 
 void setup() {
   pinMode(PIN_LED, OUTPUT);
@@ -27,11 +54,8 @@ void setup() {
 
   on = EEPROM.read(EEPROM_ON_ADDRESS);
   mode = EEPROM.read(EEPROM_MODE_ADDRESS);
-
-  Serial.print("Read state from EEPROM: ");
-  Serial.println(on);
-  Serial.print("Read mode from EEPROM: ");
-  Serial.println(mode);
+  hue = EEPROM.read(EEPROM_HUE_ADDRESS);
+  value = EEPROM.read(EEPROM_VALUE_ADDRESS);
 }
 
 void loop() {
@@ -57,7 +81,40 @@ void loop() {
   }
   btnPrevious = btnNew;
 
+  // Testing until I get actual LED
   digitalWrite(PIN_LED, on ? LOW : HIGH);
+
+  if (on) {
+    unsigned long msSinceLastLoop = millis() - tLastLoop;
+
+    switch (mode) {
+      case 0:
+        // Static color, no need to change
+        break;
+      case 1:
+        // Cycle trough hue, wrapping around at 1.0
+        hue = fmod(hue + (HUE_STEP_PER_S / 1000) * msSinceLastLoop, 1.0);
+        break;
+      case 2:
+        // Brightness breath effect
+        float newValue = value + (BRIGHTNESS_STEP_PER_S / 1000) * msSinceLastLoop * (brightnessGoingUp ? 1 : -1);
+        if (newValue > 1) brightnessGoingUp = false;
+        if (newValue < 0) brightnessGoingUp = true;
+        value = max(0, min(newValue, 1.0));
+        break;
+    }
+
+    Serial.print("Hue: ");
+    Serial.print(hue);
+    Serial.print(", saturation: ");
+    Serial.print(saturation);
+    Serial.print(", value: ");
+    Serial.println(value);
+
+    setLEDColor(hsv2rgb(hue, saturation, value, rgbColor));
+  }
+
+  tLastLoop = millis();
 
   // Loop interval
   delay(LOOP_INTERVAL);
@@ -78,20 +135,36 @@ void onLongClick() {
 void cycleMode() {
   mode ++;
   mode = mode % 3;
-  saveStateToEEPROM();
+  EEPROM.write(EEPROM_MODE_ADDRESS, mode);
 }
 
 void toggleOn() {
   on = !on;
-  saveStateToEEPROM();
+  EEPROM.write(EEPROM_ON_ADDRESS, on);
 }
 
-void saveStateToEEPROM() {
-  Serial.print("On: ");
-  Serial.println(on);
-  Serial.print("Mode: ");
-  Serial.println(mode);
+// Color stuff (https://gist.github.com/postspectacular/2a4a8db092011c6743a7)
+// HSV->RGB conversion based on GLSL version
+// expects hsv channels defined in 0.0 .. 1.0 interval
+float fract(float x) { return x - int(x); }
+float mix(float a, float b, float t) { return a + (b - a) * t; }
 
-  EEPROM.write(EEPROM_O _ADDRESS, on);
-  EEPROM.write(EEPROM_MODE_ADDRESS, mode);
+float* hsv2rgb(float h, float s, float b, float* rgb) {
+  rgb[0] = b * mix(1.0, constrain(abs(fract(h + 1.0) * 6.0 - 3.0) - 1.0, 0.0, 1.0), s);
+  rgb[1] = b * mix(1.0, constrain(abs(fract(h + 0.6666666) * 6.0 - 3.0) - 1.0, 0.0, 1.0), s);
+  rgb[2] = b * mix(1.0, constrain(abs(fract(h + 0.3333333) * 6.0 - 3.0) - 1.0, 0.0, 1.0), s);
+  return rgb;
+}
+
+void setLEDColor(float *rgb) {
+  analogWrite(PIN_RED, (int)((1.0 - rgb[0]) * 255));
+  analogWrite(PIN_GREEN, (int)((1.0 - rgb[1]) * 255));
+  analogWrite(PIN_BLUE, (int)((1.0 - rgb[2]) * 255));  
+
+  Serial.print("Set LED color: ");
+  Serial.print(rgb[0]);
+  Serial.print(", ");
+  Serial.print(rgb[1]);
+  Serial.print(", ");
+  Serial.println(rgb[2]);
 }
