@@ -1,30 +1,30 @@
 #include <EEPROM.h>
 #include <math.h>
 
-int PIN_LED = 17;
-int PIN_BTN = 3;
-int PIN_RED;
-int PIN_GREEN;
-int PIN_BLUE;
+const int PIN_LED = 17;
+const int PIN_BTN = 3;
+const int PIN_RED;
+const int PIN_GREEN;
+const int PIN_BLUE;
 
-int LOOP_INTERVAL = 100;
+const int LOOP_INTERVAL = 10;
 
 int EEPROM_CURRENT_ADDRESS = 0;
 
-int EEPROM_ON_ADDRESS = EEPROM_CURRENT_ADDRESS++;
-int EEPROM_MODE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
-int EEPROM_HUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
-int EEPROM_VALUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+const int EEPROM_ON_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+const int EEPROM_MODE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+const int EEPROM_HUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
+const int EEPROM_VALUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
 
-float BRIGHTNESS_STEP_PER_S = 0.33;
-float HUE_STEP_PER_S = 0.2;
+const float BRIGHTNESS_STEP_PER_S = 0.33;
+const float HUE_STEP_PER_S = 0.2;
 
 // State
 bool on;
 //  mode 0: static light
 //  mode 1: hue cycle
 //  mode 2: brightness cycle
-int mode ;
+int mode;
 
 // LED state
 float hue;
@@ -37,7 +37,7 @@ unsigned long tDown = 0;
 boolean pressHandled = true;
 
 // Reusable rgb color
-float rgbColor[3];
+const float rgbColor[3];
 
 // Time of last loop
 unsigned long tLastLoop = 0;
@@ -82,10 +82,11 @@ void loop() {
   btnPrevious = btnNew;
 
   // Testing until I get actual LED
-  digitalWrite(PIN_LED, on ? LOW : HIGH);
+  analogWrite(PIN_LED, on ? (int)((1.0 - value) * 255) : HIGH);
 
   if (on) {
     unsigned long msSinceLastLoop = millis() - tLastLoop;
+    // Serial.println(msSinceLastLoop);
 
     switch (mode) {
       case 0:
@@ -161,10 +162,10 @@ void setLEDColor(float *rgb) {
   analogWrite(PIN_GREEN, (int)((1.0 - rgb[1]) * 255));
   analogWrite(PIN_BLUE, (int)((1.0 - rgb[2]) * 255));  
 
-  Serial.print("Set LED color: ");
-  Serial.print(rgb[0]);
-  Serial.print(", ");
-  Serial.print(rgb[1]);
-  Serial.print(", ");
-  Serial.println(rgb[2]);
+  // Serial.print("Set LED color: ");
+  // Serial.print(rgb[0]);
+  // Serial.print(", ");
+  // Serial.print(rgb[1]);
+  // Serial.print(", ");
+  // Serial.println(rgb[2]);
 }
