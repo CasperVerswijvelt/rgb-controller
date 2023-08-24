@@ -76,6 +76,8 @@ void setup() {
   mode = EEPROM.read(EEPROM_MODE_ADDRESS);
   hue = EEPROM.read(EEPROM_HUE_ADDRESS);
   value = EEPROM.read(EEPROM_VALUE_ADDRESS);
+
+   if (value < 0.1) value = 1;
 }
 
 void loop() {
