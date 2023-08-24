@@ -84,10 +84,10 @@ void loop() {
   // Click handling
   int reading = digitalRead(PIN_BTN);
 
-  Serial.print("Reading: ");
-  Serial.print(reading);
-  Serial.print(", buttonState: ");
-  Serial.println(buttonState);
+  // Serial.print("Reading: ");
+  // Serial.print(reading);
+  // Serial.print(", buttonState: ");
+  // Serial.println(buttonState);
 
   if (reading != lastButtonState) {
     lastDebounceTime = millis();
@@ -96,12 +96,9 @@ void loop() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (reading != buttonState) {
 
-      Serial.println("Not equal");
-
       buttonState = reading;
 
       if (buttonState == LOW) {
-        Serial.println("Set to false");
         tDown = millis();
         pressHandled = false;
       } else {
@@ -152,20 +149,6 @@ void loop() {
     setLEDColor(hsv2rgb(hue, saturation, value, rgbColor));
   } else {
 
-    unsigned long msSinceOff = millis() - tOff;
-
-    if (tOff > 0 && msSinceOff < (OFF_FADE_OUT_S * 1000)) {
-
-      // float fadingProgress = msSinceOff / (OFF_FADE_OUT_S * 1000);
-      // Serial.print("Ms since off: ");
-      // Serial.print(msSinceOff);
-      // Serial.print(", percentage: ");
-      // Serial.println(fadingProgress);
-
-      setLEDColor(new float[3] {0.0, 0.0, 0.0});
-    } else {
-      setLEDColor(new float[3] {0.0, 0.0, 0.0});
-    }
     setLEDColor(new float[3] {0.0, 0.0, 0.0});
   }
 
@@ -203,6 +186,17 @@ void toggleOn() {
   } else {
     tOff = millis();
   }
+
+  // int ms = OFF_FADE_OUT_S * 1000;
+  // float tempHue = hue;
+  // for(int i = 0; i < ms; i += LOOP_INTERVAL) {
+  //   Serial.print("hue=");
+  //   Serial.println(hue);
+  //   float percent = ((float)i / ms);
+  //   setLEDColor(hsv2rgb(((int)(hue * 100)) / 100.0, saturation, value * (on ? percent : 1 - percent), rgbColor));
+  //   delay(LOOP_INTERVAL);
+  // }
+  // tLastLoop = millis();
 }
 
 // Color stuff (https://gist.github.com/postspectacular/2a4a8db092011c6743a7)
