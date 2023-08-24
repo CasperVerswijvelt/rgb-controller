@@ -3,9 +3,9 @@
 
 const int PIN_LED = 17;
 const int PIN_BTN = 3;
-const int PIN_RED;
-const int PIN_GREEN;
-const int PIN_BLUE;
+const int PIN_RED = 5;
+const int PIN_GREEN = 6;
+const int PIN_BLUE = 9;
 
 const int LOOP_INTERVAL = 10;
 
@@ -17,7 +17,18 @@ const int EEPROM_HUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
 const int EEPROM_VALUE_ADDRESS = EEPROM_CURRENT_ADDRESS++;
 
 const float BRIGHTNESS_STEP_PER_S = 0.33;
-const float HUE_STEP_PER_S = 0.2;
+const float HUE_STEP_PER_S = 0.025;
+const float OFF_FADE_OUT_S = 1;
+
+// Variables will change:
+int buttonState;            // the current reading from the input pin
+int lastButtonState = LOW;  // the previous reading from the input pin
+
+// the following variables are unsigned longs because the time, measured in
+// milliseconds, will quickly become a bigger number than can be stored in an int.
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 40;    // the debounce time; increase if the output flickers
+
 
 // State
 bool on;
@@ -42,12 +53,21 @@ const float rgbColor[3];
 // Time of last loop
 unsigned long tLastLoop = 0;
 
+// Time since off (for fading out)
+unsigned long tOff = 0;
+
 // Brightness breath effect, going up or doin
 bool brightnessGoingUp = true;
 
 void setup() {
-  pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_GREEN, OUTPUT);
+  pinMode(PIN_BLUE, OUTPUT);
+  pinMode(PIN_RED, OUTPUT);
   pinMode(PIN_BTN, INPUT_PULLUP);
+
+  // Turn off internal LED
+  pinMode(LED_BUILTIN_TX,INPUT);
+  pinMode(LED_BUILTIN_RX,INPUT);
 
   Serial.begin(9600);
   Serial.println("Initialize Serial Monitor");
@@ -59,34 +79,49 @@ void setup() {
 }
 
 void loop() {
-  // Read button and compare to previous
-  int btnNew = digitalRead(PIN_BTN);
-  if (btnPrevious != btnNew) {
+  // Click handling
+  int reading = digitalRead(PIN_BTN);
 
-    if (btnNew == LOW) {
-      tDown = millis();
-      pressHandled = false;
-    } else {
-      if (!pressHandled) {
-        Serial.println("Short click");
-        onShortClick();
-        pressHandled = true;
+  Serial.print("Reading: ");
+  Serial.print(reading);
+  Serial.print(", buttonState: ");
+  Serial.println(buttonState);
+
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+
+      Serial.println("Not equal");
+
+      buttonState = reading;
+
+      if (buttonState == LOW) {
+        Serial.println("Set to false");
+        tDown = millis();
+        pressHandled = false;
+      } else {
+        if (!pressHandled) {
+          onShortClick();
+          pressHandled = true;
+        }
       }
     }
   }
-  if (!pressHandled && (millis() - tDown) > 1000) {
-    Serial.println("Long click");
-    onLongClick();
+  // Serial.print("Press handled: ");
+  // Serial.println(pressHandled);
+  if (pressHandled != true && (millis() - tDown) > 1000) {
     pressHandled = true;
+    onLongClick();
   }
-  btnPrevious = btnNew;
 
-  // Testing until I get actual LED
-  analogWrite(PIN_LED, on ? (int)((1.0 - value) * 255) : HIGH);
+  lastButtonState = reading;
 
+  // Light handling
   if (on) {
     unsigned long msSinceLastLoop = millis() - tLastLoop;
-    // Serial.println(msSinceLastLoop);
 
     switch (mode) {
       case 0:
@@ -105,14 +140,31 @@ void loop() {
         break;
     }
 
-    Serial.print("Hue: ");
-    Serial.print(hue);
-    Serial.print(", saturation: ");
-    Serial.print(saturation);
-    Serial.print(", value: ");
-    Serial.println(value);
+    // Serial.print("Hue: ");
+    // Serial.print(hue);
+    // Serial.print(", saturation: ");
+    // Serial.print(saturation);
+    // Serial.print(", value: ");
+    // Serial.println(value);
 
     setLEDColor(hsv2rgb(hue, saturation, value, rgbColor));
+  } else {
+
+    unsigned long msSinceOff = millis() - tOff;
+
+    if (tOff > 0 && msSinceOff < (OFF_FADE_OUT_S * 1000)) {
+
+      // float fadingProgress = msSinceOff / (OFF_FADE_OUT_S * 1000);
+      // Serial.print("Ms since off: ");
+      // Serial.print(msSinceOff);
+      // Serial.print(", percentage: ");
+      // Serial.println(fadingProgress);
+
+      setLEDColor(new float[3] {0.0, 0.0, 0.0});
+    } else {
+      setLEDColor(new float[3] {0.0, 0.0, 0.0});
+    }
+    setLEDColor(new float[3] {0.0, 0.0, 0.0});
   }
 
   tLastLoop = millis();
@@ -122,6 +174,7 @@ void loop() {
 }
 
 void onShortClick() {
+  Serial.println("Short click");
   if (!on) {
     toggleOn();
   } else {
@@ -130,6 +183,7 @@ void onShortClick() {
 }
 
 void onLongClick() {
+  Serial.println("Long click");
   toggleOn();
 }
 
@@ -142,6 +196,11 @@ void cycleMode() {
 void toggleOn() {
   on = !on;
   EEPROM.write(EEPROM_ON_ADDRESS, on);
+  if (on) {
+    if (value < 0.1) value = 1;
+  } else {
+    tOff = millis();
+  }
 }
 
 // Color stuff (https://gist.github.com/postspectacular/2a4a8db092011c6743a7)
@@ -158,9 +217,10 @@ float* hsv2rgb(float h, float s, float b, float* rgb) {
 }
 
 void setLEDColor(float *rgb) {
-  analogWrite(PIN_RED, (int)((1.0 - rgb[0]) * 255));
-  analogWrite(PIN_GREEN, (int)((1.0 - rgb[1]) * 255));
-  analogWrite(PIN_BLUE, (int)((1.0 - rgb[2]) * 255));  
+
+  analogWrite(PIN_RED, 255 - (int)((rgb[0]) * 255 * value));
+  analogWrite(PIN_GREEN, 255 - (int)((rgb[1]) * 255 * value));
+  analogWrite(PIN_BLUE, 255 - (int)((rgb[2]) * 255 * value));
 
   // Serial.print("Set LED color: ");
   // Serial.print(rgb[0]);
